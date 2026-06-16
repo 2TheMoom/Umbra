@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #e9e6df;
+  --surface: #f0ede7;
+  --surface-2: #e2ded5;
+  --border: rgba(22, 23, 25, 0.12);
+  --text: #161719;
+  --muted: #5a5a60;
+  --navy: #1f3a8f;
+  --green: #1a6b3c;
+  --crimson: #b01c2e;
+  --zama-yellow: #ffd208;
+  --zama-black: #000000;
+  --font-barlow: "Barlow Condensed", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  font-family: var(--font-barlow);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* live dot pulse */
+@keyframes ping {
+  0% { box-shadow: 0 0 0 0 rgba(26, 107, 60, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(26, 107, 60, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(26, 107, 60, 0); }
+}
+
+.live-dot {
+  animation: ping 2s infinite;
+}
+
+/* spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
