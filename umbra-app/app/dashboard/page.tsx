@@ -49,6 +49,7 @@ export default function DashboardPage() {
       // Fetch events
       try {
         const data = await fetchAllEvents();
+        console.log("[dashboard] fetchAllEvents result:", data);
         setEvents(data.events);
         setStats({
           payments: data.totalPayments,
@@ -56,8 +57,8 @@ export default function DashboardPage() {
           deposits: data.totalDeposits,
           settled: data.totalSettled,
         });
-      } catch {
-        // no events yet
+      } catch (err) {
+        console.error("[dashboard] fetchAllEvents failed:", err);
       } finally {
         setLoading(false);
       }

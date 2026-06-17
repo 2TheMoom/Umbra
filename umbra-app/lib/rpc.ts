@@ -48,7 +48,13 @@ export async function checkContract(address: string): Promise<boolean> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getLogs(address: string): Promise<any[]> {
-  return rpc("eth_getLogs", [{ address, fromBlock: "0x0", toBlock: "latest" }]);
+  // sepolia.drpc.org caps eth_getLogs at a 50,000 block range. Since these
+  // contracts were just deployed, we only need recent history anyway, not
+  // the full chain from genesis. 45,000 blocks (~6 days on Sepolia) gives
+  // headroom under the cap while comfortably covering anything since deploy.
+  const latest = await getBlockNumber();
+  const fromBlock = "0x" + Math.max(0, latest - 45000).toString(16);
+  return rpc("eth_getLogs", [{ address, fromBlock, toBlock: "latest" }]);
 }
 
 function parseTopicUint(topic: string | undefined): number {
