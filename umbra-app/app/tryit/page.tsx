@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useAccount, useConnect, useDisconnect, useSwitchChain, useWriteContract } from "wagmi";
+import { useState, useEffect } from "react";
+import { useAccount, useConnect, useDisconnect, useSwitchChain, useWriteContract, useConfig } from "wagmi";
+import { waitForTransactionReceipt } from "wagmi/actions";
 import { injected } from "wagmi/connectors";
 import { sepolia } from "wagmi/chains";
 import { Topbar } from "@/components/Topbar";
@@ -46,7 +47,17 @@ function TxResult({ status, label }: { status: StepStatus; label: string }) {
   if (status.state === "error") {
     return (
       <div className="mt-2 bg-[rgba(176,28,46,0.08)] border border-[rgba(176,28,46,0.2)] rounded-md p-3 mono text-[12px] text-[#b01c2e]">
-        {status.error}
+        <div>{status.error}</div>
+        {status.txHash && (
+          <a
+            href={`${ETHERSCAN_BASE}/tx/${status.txHash}`}
+            target="_blank"
+            rel="noopener"
+            className="text-[#b01c2e] underline block mt-1"
+          >
+            view reverted tx ↗
+          </a>
+        )}
       </div>
     );
   }
@@ -69,10 +80,16 @@ function TxResult({ status, label }: { status: StepStatus; label: string }) {
 
 export default function TryItPage() {
   const { address, isConnected } = useAccount();
+  const [mounted, setMounted] = useState(false);
+  // Standard mounted-flag pattern to avoid SSR/client hydration mismatch
+  // on wallet connection state. Intentional, not an accidental external sync.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setMounted(true), []);
   const { connect } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
+  const wagmiConfig = useConfig();
 
   const [payerId, setPayerId] = useState("100");
   const [serviceId, setServiceId] = useState("101");
@@ -101,6 +118,21 @@ export default function TryItPage() {
     setStep(n, { state: "active", error: undefined });
     try {
       const txHash = await fn();
+
+      if (txHash) {
+        const receipt = await waitForTransactionReceipt(wagmiConfig, {
+          hash: txHash as `0x${string}`,
+        });
+        if (receipt.status === "reverted") {
+          setStep(n, {
+            state: "error",
+            txHash: txHash as string,
+            error: "Transaction reverted on-chain. Check the agent ID belongs to the connected wallet, and that prior steps completed with this same wallet.",
+          });
+          return;
+        }
+      }
+
       setStep(n, { state: "done", txHash: txHash as string | undefined });
     } catch (e: unknown) {
       const err = e as { shortMessage?: string; message?: string };
@@ -128,6 +160,7 @@ export default function TryItPage() {
         abi: VAULT_ABI,
         functionName: "deposit",
         args: [BigInt(payerId), handle, proof],
+        gas: BigInt(1500000),
       });
       return tx;
     });
@@ -143,6 +176,7 @@ export default function TryItPage() {
         abi: POLICY_ABI,
         functionName: "setLimit",
         args: [BigInt(payerId), BigInt(serviceId), handle, proof],
+        gas: BigInt(1500000),
       });
       return tx;
     });
@@ -177,6 +211,7 @@ export default function TryItPage() {
         abi: GATE_ABI,
         functionName: "requestPayment",
         args: [BigInt(payerId), BigInt(serviceId), handle, proof],
+        gas: BigInt(2500000),
       });
       return tx;
     });
@@ -208,11 +243,11 @@ export default function TryItPage() {
           <div>
             <div className="mono text-[10px] tracking-widest text-[#5a5a60] uppercase mb-1">Wallet</div>
             <div className="mono text-[13px] font-semibold">
-              {isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
+              {mounted && isConnected && address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "Not connected"}
             </div>
-            {isConnected && <div className="mono text-[11px] text-[#5a5a60]">Sepolia testnet</div>}
+            {mounted && isConnected && <div className="mono text-[11px] text-[#5a5a60]">Sepolia testnet</div>}
           </div>
-          {isConnected ? (
+          {mounted && isConnected ? (
             <button
               onClick={() => disconnect()}
               className="bg-[#161719] text-white mono text-[11px] font-bold tracking-widest px-4 py-2 rounded-md"
