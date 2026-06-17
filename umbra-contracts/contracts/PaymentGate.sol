@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { FHE, euint64, ebool, externalEuint64 } from "@fhevm/solidity/lib/FHE.sol";
-import { SepoliaConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
+import { ZamaEthereumConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
 import { AgentVault } from "./AgentVault.sol";
 import { SpendPolicy } from "./SpendPolicy.sol";
 
@@ -21,7 +21,7 @@ import { SpendPolicy } from "./SpendPolicy.sol";
 ///      Steps 5 and 6 are what let this contract run FHE.le against
 ///      ciphertext it does not own. Without them, requestPayment reverts
 ///      with an FHEVM ACL error, not a logic error.
-contract PaymentGate is SepoliaConfig {
+contract PaymentGate is ZamaEthereumConfig {
     AgentVault public immutable vault;
     SpendPolicy public immutable policy;
 

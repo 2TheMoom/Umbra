@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { FHE, euint64, externalEuint64 } from "@fhevm/solidity/lib/FHE.sol";
-import { SepoliaConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
+import { ZamaEthereumConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
 
 /// @title SpendPolicy
 /// @notice Stores per-agent, per-service encrypted spend limits.
@@ -10,7 +10,7 @@ import { SepoliaConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
 ///      these limits (via getLimit, after grantAccess) to authorize
 ///      payments on ciphertext, the limit value itself is never exposed
 ///      on-chain.
-contract SpendPolicy is SepoliaConfig {
+contract SpendPolicy is ZamaEthereumConfig {
     /// @notice limit[agentId][serviceId] = encrypted max spend per call
     mapping(uint256 => mapping(uint256 => euint64)) private _limits;
 

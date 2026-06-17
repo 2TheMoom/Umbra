@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { FHE, euint64, ebool, externalEuint64 } from "@fhevm/solidity/lib/FHE.sol";
-import { SepoliaConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
+import { ZamaEthereumConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
 
 /// @title AgentVault
 /// @notice Holds confidential balances for autonomous agents using FHEVM.
@@ -13,7 +13,7 @@ import { SepoliaConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
 /// @dev Part of the Umbra confidential payment gate (Zama Season 3,
 ///      Builder Track). SpendPolicy and PaymentGate are deployed and wired
 ///      in separately, see setPaymentGate and settlePayment below.
-contract AgentVault is SepoliaConfig {
+contract AgentVault is ZamaEthereumConfig {
     /// @notice The address that deployed this contract. Used only to
     ///         authorize the one-time PaymentGate wiring.
     address public immutable deployer;
