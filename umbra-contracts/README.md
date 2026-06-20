@@ -8,9 +8,9 @@ Program, Season 3, Builder Track). This package holds the on-chain side:
 
 | Contract       | Address                                       |
 |----------------|------------------------------------------------|
-| `AgentVault`   | [`0xE59c34aea43C5f1b52a753983e84178eDDFd6de2`](https://sepolia.etherscan.io/address/0xE59c34aea43C5f1b52a753983e84178eDDFd6de2) |
-| `SpendPolicy`  | [`0x2421a4742734BcC9d9A9BDb548de4273d7e27330`](https://sepolia.etherscan.io/address/0x2421a4742734BcC9d9A9BDb548de4273d7e27330) |
-| `PaymentGate`  | [`0xE655863bA1349241201A1a7DcD971d9fcD22D751`](https://sepolia.etherscan.io/address/0xE655863bA1349241201A1a7DcD971d9fcD22D751) |
+| `AgentVault`   | [`0x2CcBF6614159924337A2281d537869ff2c0d0f66`](https://sepolia.etherscan.io/address/0x2CcBF6614159924337A2281d537869ff2c0d0f66) |
+| `SpendPolicy`  | [`0x959c14a9b51C4257695Db187273F6f6B9D5CC772`](https://sepolia.etherscan.io/address/0x959c14a9b51C4257695Db187273F6f6B9D5CC772) |
+| `PaymentGate`  | [`0x9b3480B39a07B091574bccA6F044c03f50dD460C`](https://sepolia.etherscan.io/address/0x9b3480B39a07B091574bccA6F044c03f50dD460C) |
 
 ## Status
 
