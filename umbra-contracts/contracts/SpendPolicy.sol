@@ -4,23 +4,18 @@ pragma solidity ^0.8.24;
 import { FHE, euint64, externalEuint64 } from "@fhevm/solidity/lib/FHE.sol";
 import { ZamaEthereumConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
 
-/// @title SpendPolicy
-/// @notice Stores per-agent, per-service encrypted spend limits.
-/// @dev Part of the Umbra confidential payment gate. PaymentGate reads
-///      these limits (via getLimit, after grantAccess) to authorize
-///      payments on ciphertext, the limit value itself is never exposed
-///      on-chain.
 contract SpendPolicy is ZamaEthereumConfig {
-    /// @notice limit[agentId][serviceId] = encrypted max spend per call
-    mapping(uint256 => mapping(uint256 => euint64)) private _limits;
+    uint256 public constant WINDOW_SIZE = 7200;
 
-    /// @notice Owner address per agent ID. Mirrors AgentVault's
-    ///         registration for now; both are replaced by
-    ///         AgentRegistryAdapter in a later pass.
+    mapping(uint256 => mapping(uint256 => euint64)) private _limits;
+    mapping(uint256 => mapping(uint256 => euint64)) private _maxCount;
+    mapping(uint256 => mapping(uint256 => euint64)) private _paymentCount;
+    mapping(uint256 => mapping(uint256 => uint256)) public windowStart;
     mapping(uint256 => address) public agentOwner;
 
     event AgentRegistered(uint256 indexed agentId, address indexed owner);
     event LimitSet(uint256 indexed agentId, uint256 indexed serviceId);
+    event FrequencyLimitSet(uint256 indexed agentId, uint256 indexed serviceId);
     event AccessGranted(uint256 indexed agentId, uint256 indexed serviceId, address indexed account);
 
     error NotAgentOwner(uint256 agentId, address caller);
@@ -31,22 +26,18 @@ contract SpendPolicy is ZamaEthereumConfig {
         _;
     }
 
-    /// @dev TODO: replace with AgentRegistryAdapter lookup once that
-    ///      contract is wired in, so AgentVault and SpendPolicy share one
-    ///      source of truth for ownership instead of each tracking it.
     function registerAgent(uint256 agentId) external {
         if (agentOwner[agentId] != address(0)) revert AlreadyRegistered(agentId);
         agentOwner[agentId] = msg.sender;
         emit AgentRegistered(agentId, msg.sender);
     }
 
-    /// @notice Sets the encrypted max spend for an agent against a service.
-    /// @dev An unset limit defaults to encrypted zero, so PaymentGate will
-    ///      decline any payment until a limit has been explicitly set.
-    function setLimit(uint256 agentId, uint256 serviceId, externalEuint64 encryptedLimit, bytes calldata inputProof)
-        external
-        onlyAgentOwner(agentId)
-    {
+    function setLimit(
+        uint256 agentId,
+        uint256 serviceId,
+        externalEuint64 encryptedLimit,
+        bytes calldata inputProof
+    ) external onlyAgentOwner(agentId) {
         euint64 limit = FHE.fromExternal(encryptedLimit, inputProof);
         _limits[agentId][serviceId] = limit;
 
@@ -56,16 +47,72 @@ contract SpendPolicy is ZamaEthereumConfig {
         emit LimitSet(agentId, serviceId);
     }
 
-    /// @notice Returns the ciphertext handle for an agent's spend limit
-    ///         against a given service.
+    function setFrequencyLimit(
+        uint256 agentId,
+        uint256 serviceId,
+        externalEuint64 encryptedMaxCount,
+        bytes calldata inputProof
+    ) external onlyAgentOwner(agentId) {
+        euint64 maxCount = FHE.fromExternal(encryptedMaxCount, inputProof);
+        _maxCount[agentId][serviceId]     = maxCount;
+        _paymentCount[agentId][serviceId] = FHE.asEuint64(0);
+        windowStart[agentId][serviceId]   = block.number;
+
+        FHE.allowThis(_maxCount[agentId][serviceId]);
+        FHE.allow(_maxCount[agentId][serviceId], msg.sender);
+
+        FHE.allowThis(_paymentCount[agentId][serviceId]);
+        FHE.allow(_paymentCount[agentId][serviceId], msg.sender);
+
+        emit FrequencyLimitSet(agentId, serviceId);
+    }
+
+    function incrementCount(uint256 agentId, uint256 serviceId, address gateAddress) external {
+        uint256 ws = windowStart[agentId][serviceId];
+        if (ws == 0) return;
+
+        if (block.number - ws >= WINDOW_SIZE) {
+            _paymentCount[agentId][serviceId] = FHE.asEuint64(0);
+            windowStart[agentId][serviceId]   = block.number;
+        }
+
+        _paymentCount[agentId][serviceId] = FHE.add(
+            _paymentCount[agentId][serviceId],
+            FHE.asEuint64(1)
+        );
+
+        FHE.allowThis(_paymentCount[agentId][serviceId]);
+        FHE.allow(_paymentCount[agentId][serviceId], agentOwner[agentId]);
+        FHE.allow(_paymentCount[agentId][serviceId], gateAddress);
+    }
+
+    function grantAccess(uint256 agentId, uint256 serviceId, address account)
+        external
+        onlyAgentOwner(agentId)
+    {
+        FHE.allow(_limits[agentId][serviceId],       account);
+        FHE.allow(_maxCount[agentId][serviceId],     account);
+        FHE.allow(_paymentCount[agentId][serviceId], account);
+        emit AccessGranted(agentId, serviceId, account);
+    }
+
     function getLimit(uint256 agentId, uint256 serviceId) external view returns (euint64) {
         return _limits[agentId][serviceId];
     }
 
-    /// @notice Grants another contract or address (e.g. PaymentGate)
-    ///         permission to operate on and decrypt a limit.
-    function grantAccess(uint256 agentId, uint256 serviceId, address account) external onlyAgentOwner(agentId) {
-        FHE.allow(_limits[agentId][serviceId], account);
-        emit AccessGranted(agentId, serviceId, account);
+    function getMaxCount(uint256 agentId, uint256 serviceId) external view returns (euint64) {
+        return _maxCount[agentId][serviceId];
+    }
+
+    function getPaymentCount(uint256 agentId, uint256 serviceId) external view returns (euint64) {
+        return _paymentCount[agentId][serviceId];
+    }
+
+    function blocksUntilReset(uint256 agentId, uint256 serviceId) external view returns (uint256) {
+        uint256 ws = windowStart[agentId][serviceId];
+        if (ws == 0) return 0;
+        uint256 elapsed = block.number - ws;
+        if (elapsed >= WINDOW_SIZE) return 0;
+        return WINDOW_SIZE - elapsed;
     }
 }
