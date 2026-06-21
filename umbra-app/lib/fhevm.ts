@@ -41,7 +41,7 @@ export async function getFhevmInstance() {
       // bundle.js is the UMD/browser bundle that exposes all exports globally.
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-expect-error — CDN URL import has no type declarations
-      const sdk = await import("https://cdn.jsdelivr.net/npm/@zama-fhe/relayer-sdk@0.4.3/bundle.js");
+      const sdk = await import("https://esm.run/@zama-fhe/relayer-sdk@0.4.3/web");
 
       // initSDK() loads the WASM binary; required before createInstance().
       if (typeof sdk.initSDK === "function") {
