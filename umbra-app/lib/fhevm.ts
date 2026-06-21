@@ -1,24 +1,5 @@
 "use client";
 
-// Zama Relayer SDK — loaded via dynamic import() of the real npm package.
-// Using a bare specifier (not a CDN URL) lets webpack/Turbopack resolve it
-// from node_modules correctly, while the dynamic import() (not a static
-// top-level import) keeps it out of the server-rendered bundle, since this
-// package is browser-only (WebAssembly + browser APIs).
-//
-// This file must only ever be imported by "use client" components.
-
-// We import the explicit "/web" subpath because the package's default
-// export (and its types) point at the Node.js build by default, which
-// is wrong for a browser context like this one.
-//
-// We use the SDK's own built-in SepoliaConfig for the protocol contract
-// addresses (ACL, Coprocessor, KMSVerifier), rather than hand-typed
-// addresses. Those addresses are tied to whatever @fhevm/solidity version
-// the deployed contracts were compiled against; our contracts are compiled
-// against @fhevm/solidity@0.11.1 with ZamaEthereumConfig, which matches
-// the SDK's SepoliaConfig exactly. If contracts are ever redeployed against
-// a different @fhevm/solidity version, this needs to stay in sync.
 const NETWORK_RPC = "https://sepolia.gateway.tenderly.co";
 const RELAYER_URL = "https://relayer.testnet.zama.cloud";
 
@@ -32,28 +13,22 @@ export async function getFhevmInstance() {
   }
   if (instanceCache) return instanceCache;
 
-  // Guard against double-init if multiple steps call this concurrently.
   if (!initPromise) {
     initPromise = (async () => {
-      // Load the Zama SDK from CDN at runtime — completely removes it from
-      // Turbopack's build graph. Zama's own templates use CDN loading for
-      // the web bundle (RelayerWeb pulls FHE crypto from Zama's CDN).
-      // bundle.js is the UMD/browser bundle that exposes all exports globally.
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-expect-error — CDN URL import has no type declarations
-      const sdk = await import("/zama-sdk.js");
+      // zama-sdk.js is an ESM module — load it via dynamic import() using
+      // a URL relative to the origin so Turbopack never sees it as a module
+      // to bundle (it's in /public, not /src or /lib).
+      const origin = window.location.origin;
+      const sdk = await import(/* webpackIgnore: true */ `${origin}/zama-sdk.js`);
 
-      // initSDK() loads the WASM binary; required before createInstance().
       if (typeof sdk.initSDK === "function") {
         await sdk.initSDK();
       }
 
-      // sdk.SepoliaConfig's type is `Omit<FullConfig, "network">`, network
-      // is intentionally excluded and must always be supplied separately.
       const config = {
         ...sdk.SepoliaConfig,
         network: NETWORK_RPC,
-        relayerUrl: (sdk.SepoliaConfig as { relayerUrl?: string })?.relayerUrl ?? RELAYER_URL,
+        relayerUrl: sdk.SepoliaConfig?.relayerUrl ?? RELAYER_URL,
       };
 
       instanceCache = await sdk.createInstance(config);
