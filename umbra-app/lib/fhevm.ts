@@ -19,7 +19,7 @@
 // against @fhevm/solidity@0.11.1 with ZamaEthereumConfig, which matches
 // the SDK's SepoliaConfig exactly. If contracts are ever redeployed against
 // a different @fhevm/solidity version, this needs to stay in sync.
-const NETWORK_RPC = "https://sepolia.drpc.org";
+const NETWORK_RPC = "https://sepolia.gateway.tenderly.co";
 const RELAYER_URL = "https://relayer.testnet.zama.cloud";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

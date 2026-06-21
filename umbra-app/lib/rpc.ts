@@ -46,6 +46,60 @@ export async function checkContract(address: string): Promise<boolean> {
   return code && code !== "0x";
 }
 
+// Calls AgentVault.agentsOf(owner) to get all agent IDs for a wallet,
+// then filters to only those also registered in SpendPolicy (payer agents).
+// Service-only agents appear in the vault but not policy, so this
+// distinguishes payers from services when both use the same wallet.
+export async function fetchAgentsOf(ownerAddress: string): Promise<number[]> {
+  const selector  = "0x13844f22"; // keccak256("agentsOf(address)")
+  const paddedAddr = ownerAddress.slice(2).toLowerCase().padStart(64, "0");
+  const data = selector + paddedAddr;
+
+  const result = await rpc("eth_call", [
+    { to: CONTRACTS.vault, data },
+    "latest",
+  ]);
+
+  if (!result || result === "0x") return [];
+
+  const hex = result.slice(2);
+  if (hex.length < 128) return [];
+
+  const length = parseInt(hex.slice(64, 128), 16);
+  if (length === 0) return [];
+
+  const agentIds: number[] = [];
+  for (let i = 0; i < length; i++) {
+    const start = 128 + i * 64;
+    const end = start + 64;
+    if (end > hex.length) break;
+    agentIds.push(parseInt(hex.slice(start, end), 16));
+  }
+
+  // Cross-check with SpendPolicy: only keep agents registered there too.
+  // agentOwner(uint256) selector: 0x6f6bf118
+  // This filters out service-only agents that were registered in the vault
+  // by the same wallet but never in SpendPolicy (i.e. not payer agents).
+  const policyOwnerSelector = "0x6f6bf118";
+  const payerAgents: number[] = [];
+  await Promise.all(
+    agentIds.map(async (id) => {
+      const paddedId = id.toString(16).padStart(64, "0");
+      const ownerResult = await rpc("eth_call", [
+        { to: CONTRACTS.policy, data: policyOwnerSelector + paddedId },
+        "latest",
+      ]);
+      // Non-zero address means it's registered in policy
+      if (ownerResult && ownerResult !== "0x" &&
+          ownerResult !== "0x" + "0".repeat(64)) {
+        payerAgents.push(id);
+      }
+    })
+  );
+
+  return payerAgents;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getLogs(address: string): Promise<any[]> {
   // sepolia.drpc.org caps eth_getLogs at a 50,000 block range. Since these
@@ -53,7 +107,7 @@ async function getLogs(address: string): Promise<any[]> {
   // the full chain from genesis. 45,000 blocks (~6 days on Sepolia) gives
   // headroom under the cap while comfortably covering anything since deploy.
   const latest = await getBlockNumber();
-  const fromBlock = "0x" + Math.max(0, latest - 45000).toString(16);
+  const fromBlock = "0x" + Math.max(0, latest - 9000).toString(16);
   return rpc("eth_getLogs", [{ address, fromBlock, toBlock: "latest" }]);
 }
 
