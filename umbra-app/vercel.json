@@ -1,4 +1,3 @@
 {
-  "buildCommand": "next build",
-  "framework": null
+  "buildCommand": "next build"
 }
