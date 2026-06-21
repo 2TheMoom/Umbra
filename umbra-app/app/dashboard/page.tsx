@@ -25,6 +25,7 @@ interface AgentAnalytics {
   balance: string;
   totalSpent: string;
   totalReceived: string;
+  spendLimit: string;
   decryptedAt: Date;
 }
 
@@ -183,49 +184,64 @@ export default function DashboardPage() {
       const instance = await getFhevmInstance();
 
       // Read raw ciphertext handles from the contract via eth_call on the RPC node.
-      async function callView(fnSelector: string, agentId: number): Promise<string> {
-        const data = fnSelector + agentId.toString(16).padStart(64, "0");
+      async function callView(fnSelector: string, agentId: number, serviceId?: number): Promise<string> {
+        const arg1 = agentId.toString(16).padStart(64, "0");
+        const arg2 = serviceId !== undefined ? serviceId.toString(16).padStart(64, "0") : "";
+        const data = fnSelector + arg1 + arg2;
+        const to   = serviceId !== undefined ? CONTRACTS.policy : CONTRACTS.vault;
         const res = await fetch(SEPOLIA_RPC, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             jsonrpc: "2.0", id: 1,
             method: "eth_call",
-            params: [{ to: CONTRACTS.vault, data }, "latest"],
+            params: [{ to, data }, "latest"],
           }),
         });
         const json = await res.json();
         return json.result;
       }
 
+      // Derive the most recent service ID this agent has paid, to fetch its limit.
+      const recentServiceId = events
+        .filter(e => e.type === "payment" && e.agentId === selectedAgent && e.serviceId !== undefined)
+        .map(e => e.serviceId as number)[0];
+
       // Correct keccak256 selectors (verified via ethers.id):
-      // balanceOf(uint256):     0x9cc7f708
-      // totalSpent(uint256):    0x0ca32959
-      // totalReceived(uint256): 0x9776d9c7
-      const [balHandle, spentHandle, receivedHandle] = await Promise.all([
+      // balanceOf(uint256):              0x9cc7f708  (vault)
+      // totalSpent(uint256):             0x0ca32959  (vault)
+      // totalReceived(uint256):          0x9776d9c7  (vault)
+      // getLimit(uint256,uint256):       0x2e869733  (policy)
+      const [balHandle, spentHandle, receivedHandle, limitHandle] = await Promise.all([
         callView("0x9cc7f708", selectedAgent),
         callView("0x0ca32959", selectedAgent),
         callView("0x9776d9c7", selectedAgent),
+        recentServiceId !== undefined
+          ? callView("0x2e869733", selectedAgent, recentServiceId)
+          : Promise.resolve("0x"),
       ]);
 
       // Decrypt all three handles in one userDecrypt call using the correct
       // relayer-sdk 0.4.x API (instance.userDecrypt, not instance.decrypt).
-      const validHandles = [balHandle, spentHandle, receivedHandle].filter(
-        (h) => h && h !== "0x" && h !== "0x" + "0".repeat(64)
-      );
+      const isValidHandle = (h: string) => h && h !== "0x" && h !== "0x" + "0".repeat(64);
 
-      if (validHandles.length === 0) {
+      if (!isValidHandle(balHandle)) {
         throw new Error("No valid ciphertext handles returned from contract.");
       }
 
       const keypair = instance.generateKeypair();
-      const handleContractPairs = validHandles.map((handle) => ({
-        handle,
-        contractAddress: CONTRACTS.vault,
-      }));
+      const handleContractPairs = [
+        { handle: balHandle,      contractAddress: CONTRACTS.vault },
+        { handle: spentHandle,    contractAddress: CONTRACTS.vault },
+        { handle: receivedHandle, contractAddress: CONTRACTS.vault },
+        ...(isValidHandle(limitHandle)
+          ? [{ handle: limitHandle, contractAddress: CONTRACTS.policy }]
+          : []),
+      ].filter(p => isValidHandle(p.handle));
+
       const startTimeStamp = Math.floor(Date.now() / 1000); // number, not string
       const durationDays   = 10;                             // number, not string
-      const contractAddresses = [CONTRACTS.vault];
+      const contractAddresses = [...new Set(handleContractPairs.map(p => p.contractAddress))];
 
       const eip712 = instance.createEIP712(
         keypair.publicKey,
@@ -272,6 +288,7 @@ export default function DashboardPage() {
       const balance  = BigInt(resultValues[0] ?? 0);
       const spent    = BigInt(resultValues[1] ?? 0);
       const received = BigInt(resultValues[2] ?? 0);
+      const limit    = resultValues[3] !== undefined ? BigInt(resultValues[3]) : null;
 
       // Format as 2-decimal cUSDT display values
       function fmt(val: bigint): string {
@@ -284,6 +301,7 @@ export default function DashboardPage() {
         balance:       fmt(balance),
         totalSpent:    fmt(spent),
         totalReceived: fmt(received),
+        spendLimit:    limit !== null ? fmt(limit) : "—",
         decryptedAt:   new Date(),
       });
 
@@ -441,7 +459,9 @@ export default function DashboardPage() {
                 </div>
                 <div className="bg-[#e2ded5] rounded-lg p-3.5">
                   <div className="mono text-[10px] text-[#5a5a60] uppercase tracking-widest mb-1">Spend Limit</div>
-                  <div className="mono text-[20px] font-bold text-[#161719]">●●●●●</div>
+                  <div className="mono text-[20px] font-bold text-[#161719]">
+                    {analytics ? analytics.spendLimit : "●●●●●"}
+                  </div>
                 </div>
               </div>
 
