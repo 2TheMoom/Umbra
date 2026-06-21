@@ -3,14 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@zama-fhe/relayer-sdk"],
 
-  turbopack: {
-  resolveAlias: {
-    "@zama-fhe/relayer-sdk/web": {
-      browser: "@zama-fhe/relayer-sdk/web",
-      default: "./lib/zama-shim.ts",
-    },
-  },
-},
+  // Empty turbopack config satisfies Next.js 16's Vercel build requirement.
+  // The Zama SDK is loaded from CDN at runtime, so Turbopack never sees it.
+  turbopack: {},
 
   async headers() {
     return [

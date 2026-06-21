@@ -35,7 +35,13 @@ export async function getFhevmInstance() {
   // Guard against double-init if multiple steps call this concurrently.
   if (!initPromise) {
     initPromise = (async () => {
-      const sdk = await import("@zama-fhe/relayer-sdk/web");
+      // Load the Zama SDK from CDN at runtime — completely removes it from
+      // Turbopack's build graph. Zama's own templates use CDN loading for
+      // the web bundle (RelayerWeb pulls FHE crypto from Zama's CDN).
+      // bundle.js is the UMD/browser bundle that exposes all exports globally.
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-expect-error — CDN URL import has no type declarations
+      const sdk = await import("https://cdn.jsdelivr.net/npm/@zama-fhe/relayer-sdk@0.4.3/bundle.js");
 
       // initSDK() loads the WASM binary; required before createInstance().
       if (typeof sdk.initSDK === "function") {
