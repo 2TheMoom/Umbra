@@ -8,8 +8,8 @@ try-it widget. Reads directly from Sepolia, no backend, no indexer.
 | Route        | What it does |
 |--------------|--------------|
 | `/`          | Landing page: the problem, how it works, contract addresses |
-| `/dashboard` | Live protocol status, real Sepolia event feed, FHE operations log |
-| `/tryit`     | Connects a wallet and walks through the full payment flow against the deployed contracts |
+| `/dashboard` | Live protocol status, wallet auto-detect, agent analytics (balance, spend limit, totalSpent, totalReceived decrypted via EIP-712), frequency limits panel, activity timeline |
+| `/tryit`     | Connects a wallet and walks through the full 6-step payment flow against the deployed contracts: register → deposit → spend limit → frequency cap → grant access → pay |
 
 ## Setup
 
@@ -51,10 +51,10 @@ components/
   Footer.tsx
 lib/
   contracts.ts           addresses + ABIs
-  rpc.ts                 event fetching via eth_getLogs, matched by real
-                          keccak256 topic0 hashes (not topic-shape guessing)
-  fhevm.ts                Zama Relayer SDK wrapper, browser-only
-  providers.tsx           wagmi + react-query setup
+  rpc.ts                 event fetching via eth_getLogs, agent lookup via agentsOf
+  fhevm.ts               Zama Relayer SDK wrapper, browser-only
+  ownership.ts           wallet ownership proof via personal_sign + viem recovery
+  providers.tsx          wagmi + react-query setup
 ```
 
 ## Notes on the FHEVM integration

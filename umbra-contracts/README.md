@@ -6,50 +6,46 @@ Program, Season 3, Builder Track). This package holds the on-chain side:
 
 **Deployed and verified on Sepolia:**
 
-| Contract       | Address                                       |
-|----------------|------------------------------------------------|
-| `AgentVault`   | [`0x2CcBF6614159924337A2281d537869ff2c0d0f66`](https://sepolia.etherscan.io/address/0x2CcBF6614159924337A2281d537869ff2c0d0f66) |
-| `SpendPolicy`  | [`0x959c14a9b51C4257695Db187273F6f6B9D5CC772`](https://sepolia.etherscan.io/address/0x959c14a9b51C4257695Db187273F6f6B9D5CC772) |
-| `PaymentGate`  | [`0x9b3480B39a07B091574bccA6F044c03f50dD460C`](https://sepolia.etherscan.io/address/0x9b3480B39a07B091574bccA6F044c03f50dD460C) |
+| Contract       | Address                                                                                                                              |
+|----------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `AgentVault`   | [`0x2CcBF6614159924337A2281d537869ff2c0d0f66`](https://sepolia.etherscan.io/address/0x2CcBF6614159924337A2281d537869ff2c0d0f66#code) |
+| `SpendPolicy`  | [`0x959c14a9b51C4257695Db187273F6f6B9D5CC772`](https://sepolia.etherscan.io/address/0x959c14a9b51C4257695Db187273F6f6B9D5CC772#code) |
+| `PaymentGate`  | [`0x9b3480B39a07B091574bccA6F044c03f50dD460C`](https://sepolia.etherscan.io/address/0x9b3480B39a07B091574bccA6F044c03f50dD460C#code) |
 
-## Status
+## What each contract does
 
-| Contract              | Status                                      |
-|------------------------|---------------------------------------------|
-| `AgentVault.sol`        | **Implemented and deployed.** Encrypted deposit/withdraw, FHE.select-based safe withdrawal, `settlePayment` for PaymentGate, access control via `FHE.allow`. |
-| `SpendPolicy.sol`       | **Implemented and deployed.** Encrypted per-agent/per-service spend limits. |
-| `PaymentGate.sol`       | **Implemented and deployed.** `requestPayment` runs `FHE.le` against balance and limit, `FHE.and`, `FHE.select`, settles via AgentVault, and makes the approval flag publicly decryptable. |
-| `AgentRegistryAdapter.sol` | Stub, not deployed. `AgentVault` and `SpendPolicy` track agent ownership locally for now; this will forward to the existing ERC-8004 registry in a later milestone. |
+| Contract         | Description |
+|------------------|-------------|
+| `AgentVault.sol`  | Encrypted balances per agent. Stores `euint64` balance, `_totalSpent`, and `_totalReceived` per agent ID. `settlePayment` is callable only by `PaymentGate`. `agentsOf(address)` returns all agent IDs owned by a wallet, used by the frontend for auto-detection on connect. |
+| `SpendPolicy.sol` | Encrypted spend limits and frequency limits per agent/service pair. Tracks `_maxCount`, `_paymentCount`, and `_windowStart` (7,200-block rolling window, ~24h on Sepolia). `blocksUntilReset` is a plaintext view used by the dashboard. |
+| `PaymentGate.sol` | The payment processor. `requestPayment` runs three FHE checks on ciphertext: `FHE.le(amount, balance)`, `FHE.le(amount, spendLimit)`, and `FHE.lt(count, maxCount)` (frequency, skipped if no limit set). `FHE.and` combines all three. `FHE.select` resolves the transfer amount to zero if any check fails. Increments the frequency counter and emits a publicly decryptable `approved` flag. |
 
-**Important:** these contracts are compiled against `@fhevm/solidity@0.11.1`
-using `ZamaEthereumConfig`. The library's bundled protocol addresses (ACL,
+## Important: @fhevm/solidity version
+
+These contracts are compiled against `@fhevm/solidity@0.11.1` using
+`ZamaEthereumConfig`. The library's bundled protocol addresses (ACL,
 Coprocessor, KMSVerifier) must match what the Zama Relayer SDK expects on
-the frontend. An outdated `@fhevm/solidity` version will compile and
-deploy without error, but every `FHE.fromExternal` call will revert
-on-chain with no decodable reason, since the deployed bytecode trusts
-different coprocessor addresses than the ones the relayer's proofs are
-valid for. If upgrading either side, check that the frontend's
-`sdk.SepoliaConfig` and this package's `ZamaConfig.sol` agree.
+the frontend. An outdated version will compile and deploy without error,
+but every `FHE.fromExternal` call will revert on-chain with no decodable
+reason. If upgrading either side, verify that the frontend's
+`sdk.SepoliaConfig` and `ZamaConfig.sol` agree on all three addresses.
 
 ## Setup sequence (per agent, before requestPayment works)
 
-PaymentGate needs FHEVM ACL permission to operate on ciphertext it doesn't
-own. This is the part that's easy to miss, if it's skipped, `requestPayment`
-reverts on an FHEVM permission error rather than a Solidity one.
-
 ```
 vault.registerAgent(agentId)
-vault.registerAgent(serviceId)        // the receiving side is an agent too
-vault.deposit(agentId, ...)           // fund the vault
+vault.registerAgent(serviceId)
+vault.deposit(agentId, encryptedAmount, inputProof)
 policy.registerAgent(agentId)
-policy.setLimit(agentId, serviceId, ...)
+policy.setLimit(agentId, serviceId, encryptedLimit, inputProof)
+policy.setFrequencyLimit(agentId, serviceId, encryptedMaxCount, inputProof)  // optional
 vault.grantAccess(agentId, paymentGateAddress)
 policy.grantAccess(agentId, serviceId, paymentGateAddress)
 ```
 
-`PaymentGate.test.ts` does all of this in `beforeEach` and covers three
-cases: approved (within balance and limit), declined for exceeding the
-spend limit, and declined for exceeding the balance.
+`PaymentGate` needs FHEVM ACL permission to operate on ciphertext it does
+not own. If `grantAccess` is skipped, `requestPayment` reverts on an FHEVM
+permission error rather than a Solidity one.
 
 ## Setup
 
@@ -58,7 +54,6 @@ npm install
 
 # One-time config for Sepolia deploys
 npx hardhat vars set MNEMONIC
-npx hardhat vars set INFURA_API_KEY
 npx hardhat vars set ETHERSCAN_API_KEY
 ```
 
@@ -74,28 +69,55 @@ npm run compile
 npm test
 ```
 
-`AgentVault.test.ts` covers: agent registration, double-registration
-rejection, encrypted deposit, encrypted withdrawal, the over-balance
-withdrawal case (resolves to zero via `FHE.select` instead of reverting),
-and access control on all owner-only functions.
+19 tests across two suites:
+
+**AgentVault.test.ts (8 tests):** registration, double-registration
+rejection, encrypted deposit, encrypted withdrawal, over-balance withdrawal
+resolves to zero via `FHE.select`, access control on owner-only functions,
+`agentsOf` returning all IDs for a wallet, `totalSpent` and `totalReceived`
+initializing to zero.
+
+**PaymentGate.test.ts (11 tests):** approved payment within balance and
+limit, declined over limit, declined over balance, `totalSpent` updates on
+approval, `totalReceived` updates on approval, `totalSpent` unchanged on
+decline, frequency limit approve, frequency limit decline after cap hit,
+payment without frequency limit set, `blocksUntilReset` before and after
+`setFrequencyLimit`.
 
 ## Deploy
 
 ```bash
-# Local FHEVM-ready node
-npx hardhat node
-npm run deploy:localhost
-
 # Sepolia
 npm run deploy:sepolia
-npm run verify:sepolia <CONTRACT_ADDRESS>
+
+# Verify (PaymentGate needs constructor args)
+npx hardhat verify --network sepolia <AGENT_VAULT_ADDRESS>
+npx hardhat verify --network sepolia <SPEND_POLICY_ADDRESS>
+npx hardhat verify --network sepolia <PAYMENT_GATE_ADDRESS> <AGENT_VAULT_ADDRESS> <SPEND_POLICY_ADDRESS>
 ```
 
 ## Architecture
 
-See the full spec and architecture diagram for how `AgentVault`,
-`SpendPolicy`, `PaymentGate`, and `AgentRegistryAdapter` fit together,
-and the security model: balances, limits, and amounts are `euint64`
-ciphertext end to end, authorization runs via `FHE.le` / `FHE.select`
-on ciphertext, and the only thing that ever goes on-chain in plaintext
-is a `PaymentProcessed(agentId, serviceId, approved)` event.
+```
+AgentVault          SpendPolicy         PaymentGate
+──────────          ───────────         ───────────
+euint64 balance     euint64 limit       requestPayment()
+euint64 totalSpent  euint64 maxCount      FHE.le(amount, balance)
+euint64 totalRcvd   euint64 count         FHE.le(amount, limit)
+agentsOf(addr)      windowStart (plain)   FHE.lt(count, maxCount)
+settlePayment()     blocksUntilReset()    FHE.and / FHE.select
+grantAccess()       grantAccess()         incrementCount()
+                                          makePubliclyDecryptable()
+```
+
+Every encrypted value is `euint64`. Authorization runs entirely on
+ciphertext. The only plaintext output is `PaymentProcessed(agentId,
+serviceId, approvedHandle)` where `approvedHandle` is publicly decryptable
+via the Zama relayer's public decryption endpoint.
+
+## Roadmap
+
+- Agent-initiated invoices (`InvoiceRegistry.sol`, standalone contract)
+- Agent Health Score (0–100 combining spend discipline, frequency compliance, encryption status)
+- Agent management actions (modify limits, revoke access, pause agent)
+- Privacy mode toggle for the dashboard
