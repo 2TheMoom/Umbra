@@ -3,7 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@zama-fhe/relayer-sdk"],
 
-  turbopack: {},
+  turbopack: {
+    resolveExtensions: [".tsx", ".ts", ".jsx", ".js", ".json"],
+  },
 
   async headers() {
     return [

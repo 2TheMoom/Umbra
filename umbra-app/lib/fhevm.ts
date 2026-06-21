@@ -35,7 +35,12 @@ export async function getFhevmInstance() {
   // Guard against double-init if multiple steps call this concurrently.
   if (!initPromise) {
     initPromise = (async () => {
-      const sdk = await import("@zama-fhe/relayer-sdk/web");
+      // Use a variable specifier so Turbopack cannot statically trace
+      // this import at build time. Without this, Turbopack tries to
+      // bundle the entire WASM SDK during compilation and hangs.
+      const specifier = "@zama-fhe/relayer-sdk/web";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sdk = await import(/* webpackIgnore: true */ specifier as any);
 
       // initSDK() loads the WASM binary; required before createInstance().
       if (typeof sdk.initSDK === "function") {
