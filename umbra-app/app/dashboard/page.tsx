@@ -58,7 +58,7 @@ export default function DashboardPage() {
   const [decrypting, setDecrypting] = useState(false);
   const [decryptError, setDecryptError] = useState<string | null>(null);
 
-  // Frequency data (plaintext: blocksUntilReset only, counts remain encrypted)
+  const [showAllEvents, setShowAllEvents] = useState(false);
   const [freqData, setFreqData] = useState<FrequencyData[]>([]);
 
   // Standard mounted-flag pattern to avoid SSR/client hydration mismatch.
@@ -390,7 +390,7 @@ export default function DashboardPage() {
                 {[
                   { label: "Agents",   val: walletAgents.length.toString() },
                   { label: "Balance",  val: analytics ? analytics.balance : "●●●●●" },
-                  { label: "Services", val: String(new Set(events.filter(e => e.type === "payment" && e.agentId === selectedAgent).map(e => e.serviceId).filter(Boolean)).size) },
+                  { label: "Services", val: stats.payments > 0 ? "—" : "0" },
                 ].map((item) => (
                   <div key={item.label} className="text-center py-1">
                     <div className="mono text-[9px] text-[#5a5a60] uppercase tracking-[0.05em] mb-1">{item.label}</div>
@@ -602,7 +602,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div>
-                {events.map((e, i) => {
+                {(showAllEvents ? events : events.slice(0, 3)).map((e, i) => {
                   const dotColor =
                     e.type === "payment" ? "bg-[#1f3a8f]" :
                     e.type === "deposit" ? "bg-[#1a6b3c]" :
@@ -638,6 +638,16 @@ export default function DashboardPage() {
                     </div>
                   );
                 })}
+                {events.length > 3 && (
+                  <button
+                    onClick={() => setShowAllEvents(!showAllEvents)}
+                    className="mt-2 w-full mono text-[11px] text-[#1f3a8f] font-bold py-2 border-t border-[rgba(22,23,25,0.08)] hover:text-[#161719] text-center"
+                  >
+                    {showAllEvents
+                      ? "Show less ↑"
+                      : `Show all ${events.length} events ↓`}
+                  </button>
+                )}
               </div>
             )}
           </div>
