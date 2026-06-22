@@ -390,7 +390,7 @@ export default function DashboardPage() {
                 {[
                   { label: "Agents",   val: walletAgents.length.toString() },
                   { label: "Balance",  val: analytics ? analytics.balance : "●●●●●" },
-                  { label: "Services", val: stats.payments > 0 ? "—" : "0" },
+                  { label: "Services", val: String(new Set(events.filter(e => e.type === "payment" && e.agentId === selectedAgent).map(e => e.serviceId).filter(Boolean)).size) },
                 ].map((item) => (
                   <div key={item.label} className="text-center py-1">
                     <div className="mono text-[9px] text-[#5a5a60] uppercase tracking-[0.05em] mb-1">{item.label}</div>
