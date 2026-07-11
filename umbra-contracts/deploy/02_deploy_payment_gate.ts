@@ -32,6 +32,19 @@ const deployPaymentGate: DeployFunction = async function (hre: HardhatRuntimeEnv
   } else {
     log(`AgentVault.paymentGate already set to ${currentGate}, skipping`);
   }
+
+  // Same one-time wiring for SpendPolicy: only the PaymentGate may call
+  // incrementCount, so it must know which address that is.
+  const policy = await ethers.getContractAt("SpendPolicy", spendPolicy.address);
+  const currentPolicyGate = await policy.paymentGate();
+
+  if (currentPolicyGate === ethers.ZeroAddress) {
+    const tx = await policy.setPaymentGate(paymentGate.address);
+    await tx.wait();
+    log(`SpendPolicy.setPaymentGate -> ${paymentGate.address}`);
+  } else {
+    log(`SpendPolicy.paymentGate already set to ${currentPolicyGate}, skipping`);
+  }
 };
 
 deployPaymentGate.tags = ["PaymentGate"];

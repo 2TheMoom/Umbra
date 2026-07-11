@@ -31,6 +31,7 @@ describe("PaymentGate", function () {
     gateAddress = await gate.getAddress();
 
     await vault.connect(payer).setPaymentGate(gateAddress);
+    await policy.connect(payer).setPaymentGate(gateAddress);
     await vault.connect(payer).registerAgent(AGENT_ID);
     await vault.connect(service).registerAgent(SERVICE_ID);
     await policy.connect(payer).registerAgent(AGENT_ID);

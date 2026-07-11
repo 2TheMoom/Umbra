@@ -49,7 +49,7 @@ contract PaymentGate is ZamaEthereumConfig {
 
         vault.settlePayment(agentId, serviceId, transferAmount);
 
-        policy.incrementCount(agentId, serviceId, address(this));
+        policy.incrementCount(agentId, serviceId);
 
         FHE.makePubliclyDecryptable(approved);
 
