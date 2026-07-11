@@ -107,7 +107,7 @@ async function getLogs(address: string): Promise<any[]> {
   // the full chain from genesis. 45,000 blocks (~6 days on Sepolia) gives
   // headroom under the cap while comfortably covering anything since deploy.
   const latest = await getBlockNumber();
-  const fromBlock = "0x" + Math.max(0, latest - 9000).toString(16);
+  const fromBlock = "0x" + Math.max(0, latest - 45000).toString(16);
   return rpc("eth_getLogs", [{ address, fromBlock, toBlock: "latest" }]);
 }
 
