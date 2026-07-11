@@ -44,7 +44,6 @@ export default function DashboardPage() {
     vault: "checking", policy: "checking", gate: "checking", block: null,
   });
   const [events, setEvents] = useState<ChainEvent[]>([]);
-  const [stats, setStats] = useState({ payments: 0, agents: 0, deposits: 0, settled: 0 });
   const [loading, setLoading] = useState(true);
 
   // Agent auto-detect
@@ -152,12 +151,6 @@ export default function DashboardPage() {
       try {
         const data = await fetchAllEvents();
         setEvents(data.events);
-        setStats({
-          payments: data.totalPayments,
-          agents:   data.totalAgents,
-          deposits: data.totalDeposits,
-          settled:  data.totalSettled,
-        });
       } catch (err) {
         console.error("[dashboard] fetchAllEvents failed:", err);
       } finally {

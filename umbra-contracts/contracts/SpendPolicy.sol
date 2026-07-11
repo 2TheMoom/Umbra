@@ -7,6 +7,9 @@ import { ZamaEthereumConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
 contract SpendPolicy is ZamaEthereumConfig {
     uint256 public constant WINDOW_SIZE = 7200;
 
+    address public immutable deployer;
+    address public paymentGate;
+
     mapping(uint256 => mapping(uint256 => euint64)) private _limits;
     mapping(uint256 => mapping(uint256 => euint64)) private _maxCount;
     mapping(uint256 => mapping(uint256 => euint64)) private _paymentCount;
@@ -17,13 +20,33 @@ contract SpendPolicy is ZamaEthereumConfig {
     event LimitSet(uint256 indexed agentId, uint256 indexed serviceId);
     event FrequencyLimitSet(uint256 indexed agentId, uint256 indexed serviceId);
     event AccessGranted(uint256 indexed agentId, uint256 indexed serviceId, address indexed account);
+    event PaymentGateSet(address indexed paymentGate);
 
     error NotAgentOwner(uint256 agentId, address caller);
     error AlreadyRegistered(uint256 agentId);
+    error NotDeployer(address caller);
+    error NotPaymentGate(address caller);
+    error PaymentGateAlreadySet();
 
     modifier onlyAgentOwner(uint256 agentId) {
         if (agentOwner[agentId] != msg.sender) revert NotAgentOwner(agentId, msg.sender);
         _;
+    }
+
+    modifier onlyPaymentGate() {
+        if (msg.sender != paymentGate) revert NotPaymentGate(msg.sender);
+        _;
+    }
+
+    constructor() {
+        deployer = msg.sender;
+    }
+
+    function setPaymentGate(address gate) external {
+        if (msg.sender != deployer) revert NotDeployer(msg.sender);
+        if (paymentGate != address(0)) revert PaymentGateAlreadySet();
+        paymentGate = gate;
+        emit PaymentGateSet(gate);
     }
 
     function registerAgent(uint256 agentId) external {
@@ -67,7 +90,7 @@ contract SpendPolicy is ZamaEthereumConfig {
         emit FrequencyLimitSet(agentId, serviceId);
     }
 
-    function incrementCount(uint256 agentId, uint256 serviceId, address gateAddress) external {
+    function incrementCount(uint256 agentId, uint256 serviceId) external onlyPaymentGate {
         uint256 ws = windowStart[agentId][serviceId];
         if (ws == 0) return;
 
@@ -83,7 +106,7 @@ contract SpendPolicy is ZamaEthereumConfig {
 
         FHE.allowThis(_paymentCount[agentId][serviceId]);
         FHE.allow(_paymentCount[agentId][serviceId], agentOwner[agentId]);
-        FHE.allow(_paymentCount[agentId][serviceId], gateAddress);
+        FHE.allow(_paymentCount[agentId][serviceId], paymentGate);
     }
 
     function grantAccess(uint256 agentId, uint256 serviceId, address account)
